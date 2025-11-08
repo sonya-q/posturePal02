@@ -11,7 +11,7 @@ import subprocess
 
 def play_sound():
     # Replace with full path if necessary
-    subprocess.run(["afplay", "/Users/alexandraroszczenko/personal/posturePal02/dog_bark.mp3"])
+    subprocess.run(["afplay", "dog_bark.mp3"])
 
 bark_played = False
 bad_posture_start = None
