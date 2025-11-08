@@ -28,7 +28,7 @@ Using **OpenCV**, **Python**, and **Arduino**, it monitors your posture in real 
 
 ### 1. Posture Tracking (Python + OpenCV)
 - Captures webcam frames.
-- Calibrates your **“good posture baseline”** during the first 60 seconds.
+- Calibrates your **“good posture baseline”** during the first 30 frames.
 - Tracks:
   - Spine curvature
   - Head tilt (left/right, forward/back)
