@@ -5,11 +5,6 @@ import time
 import subprocess
 import platform
 
-# Initialize alert variables
-last_alert_time = 0
-alert_cooldown = 30.0  # Increased to 30 seconds to avoid notification spam
-
-
 def calculate_angle(a, b, c):
     """
     Calculate the angle between three points.
@@ -112,11 +107,6 @@ forward_head_threshold = 0  # NEW
 slouch_threshold = 0        # NEW
 spine_curvature_threshold = 0   # NEW: For detecting excessive spine curvature
 CALIBRATION_TARGET = 60
-# Track previous posture metrics
-prev_forward_head = None
-prev_slouch = None
-prev_spine_curvature = None
-
 
 # Initialize alert variables
 last_alert_time = 0
@@ -298,44 +288,41 @@ while cap.isOpened():
             current_time = time.time()
             posture_issues = []
             detailed_corrections = []
-
-            # Determine if posture is getting worse
-            getting_worse = False
-
-            if prev_forward_head is not None:
-                # Only correct if the current measurement is worse than before
-                if forward_head_distance > forward_head_threshold and forward_head_distance > prev_forward_head:
-                    posture_issues.append("forward head")
-                    detailed_corrections.append("HEAD: Too far forward - tuck chin, align ears over shoulders")
-                    getting_worse = True
-
-                if slouch_distance > slouch_threshold and slouch_distance > prev_slouch:
-                    posture_issues.append("slouching")
-                    detailed_corrections.append("SPINE: Slouching forward - sit up tall, engage core")
-                    getting_worse = True
-
-                if spine_curvature > spine_curvature_threshold and spine_curvature > prev_spine_curvature:
-                    posture_issues.append("spine curvature")
-                    detailed_corrections.append("BACK: Spine too curved - straighten upper back, open chest")
-                    getting_worse = True
-            else:
-                # Initialize tracking for the first time
-                getting_worse = False
-
-            # Always update previous values for comparison next frame
-            prev_forward_head = forward_head_distance
-            prev_slouch = slouch_distance
-            prev_spine_curvature = spine_curvature
-
-            if getting_worse:
+            
+            # Check angles (lower is bad)
+            if shoulder_angle < shoulder_threshold:
+                posture_issues.append("shoulders")
+                detailed_corrections.append("SHOULDERS: Pull back and down, open chest")
+            
+            if neck_angle < neck_threshold:
+                posture_issues.append("neck tilt")
+                detailed_corrections.append("NECK: Keep head level, don't tilt")
+            
+            # Check distances (higher is bad - more forward lean)
+            if forward_head_distance > forward_head_threshold:
+                posture_issues.append("forward head")
+                detailed_corrections.append("HEAD: Too far forward - tuck chin, align ears over shoulders")
+            
+            if slouch_distance > slouch_threshold:
+                posture_issues.append("slouching")
+                detailed_corrections.append("SPINE: Slouching forward - sit up tall, engage core")
+            
+            # Check spine curvature (higher = more curved/hunched, which is bad)
+            if spine_curvature > spine_curvature_threshold:
+                posture_issues.append("spine curvature")
+                detailed_corrections.append("BACK: Spine too curved - straighten upper back, open chest")
+            
+            if posture_issues:
                 status = "Poor Posture ⚠"
-                color = (0, 0, 255)
+                color = (0, 0, 255)  # Red
+                
                 if current_time - last_alert_time > alert_cooldown:
                     print(f"\n⚠️  POSTURE CORRECTION NEEDED:")
                     for correction in detailed_corrections:
                         print(f"   • {correction}")
                     print()
-
+                    
+                    # Send macOS notification
                     issue_summary = ", ".join(posture_issues)
                     main_correction = detailed_corrections[0] if detailed_corrections else "Check your posture"
                     send_macos_notification(
@@ -343,16 +330,31 @@ while cap.isOpened():
                         message=main_correction,
                         subtitle=f"Issues: {issue_summary}"
                     )
-
+                    
                     last_alert_time = current_time
+                
+                # Display corrections on screen
+                # ...existing code...
+                # Display corrections on screen (bigger, more readable)
+                y_offset = 100
+                corr_font = cv2.FONT_HERSHEY_SIMPLEX
+                corr_scale = 0.9     # larger text
+                corr_thickness = 3   # bolder text
+                corr_color = (0, 165, 255)
+                line_height = int(36 * corr_scale) + corr_thickness
+                for correction in detailed_corrections:
+                    cv2.putText(frame, correction, (10, y_offset),
+                                corr_font, corr_scale, corr_color, corr_thickness, cv2.LINE_AA)
+                    y_offset += line_height
+# ...existing code...
             else:
                 status = "Good Posture ✓"
-                color = (0, 255, 0)
-
-            # Display status
+                color = (0, 255, 0)  # Green
+            
+            # Display status and measurements
             cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
             cv2.putText(frame, f"S:{shoulder_angle:.0f}° N:{neck_angle:.0f}° FH:{forward_head_distance:.0f}px Sl:{slouch_distance:.0f}px SC:{spine_curvature:.2f}", 
-                    (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
+                       (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
 
     # Display the frame
     cv2.imshow('Posture Monitor - Fixed Side View', frame)
