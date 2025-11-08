@@ -1,19 +1,16 @@
 #include <Servo.h>
 
+// ----- Servo setup -----
 Servo servoEars;
-
 const int PIN_EARS = 9;
 
-// For continuous servos:
-// 90 = stop
-// <90 = spin one way
-// >90 = spin the other way
-const int SPEED_FORWARD = 70;  // adjust for slow forward
-const int SPEED_BACK    = 110; // adjust for slow reverse
-const int SPEED_STOP    = 90;
+// ----- Servo angles (tune these to your build) -----
+const int ANGLE_GOOD = 90;   // center
+const int ANGLE_WARN = 75;   // slightly down
+const int ANGLE_BAD  = 60;   // fully down
 
-// How long to spin (ms)
-const int MOVE_TIME = 400;  // tweak to match how far it “tilts”
+// ----- Step delay for smooth movement (ms) -----
+const int STEP_DELAY = 15;
 
 // ----- State machine -----
 enum PostureState {
@@ -23,42 +20,63 @@ enum PostureState {
 };
 
 PostureState currentState = STATE_GOOD;
-PostureState lastState    = STATE_GOOD;
 
-void applyTransition(PostureState from, PostureState to) {
-  // From GOOD → WARN → BAD: spin forward
-  // From BAD → WARN → GOOD: spin backward
-  int speed = SPEED_STOP;
+// Move servo smoothly from current position to target angle
+void moveServoTo(int targetAngle) {
+  int currentAngle = servoEars.read();  // current servo position
 
-  if ((from == STATE_GOOD && to == STATE_WARN) ||
-      (from == STATE_WARN && to == STATE_BAD)) {
-    speed = SPEED_FORWARD;        // forward
-  } 
-  else if ((from == STATE_WARN && to == STATE_GOOD) ||
-           (from == STATE_BAD && to == STATE_GOOD) ||
-           (from == STATE_BAD && to == STATE_WARN)) {
-    speed = SPEED_BACK;           // backward
+  if (currentAngle < targetAngle) {
+    for (int a = currentAngle; a <= targetAngle; a++) {
+      servoEars.write(a);
+      delay(STEP_DELAY);
+    }
+  } else {
+    for (int a = currentAngle; a >= targetAngle; a--) {
+      servoEars.write(a);
+      delay(STEP_DELAY);
+    }
   }
+}
 
-  servoEars.write(speed);
-  delay(MOVE_TIME);               // spin for some time
-  servoEars.write(SPEED_STOP);    // stop
+// Apply transition from one state to another
+void applyTransition(PostureState from, PostureState to) {
+  int targetAngle;
+
+  if (to == STATE_GOOD) targetAngle = ANGLE_GOOD;
+  else if (to == STATE_WARN) targetAngle = ANGLE_WARN;
+  else targetAngle = ANGLE_BAD;
+
+  // Move servo smoothly
+  moveServoTo(targetAngle);
+
+  // Serial feedback
+  Serial.print("Transition: ");
+  Serial.print(from == STATE_GOOD ? "GOOD" :
+               from == STATE_WARN ? "WARN" : "BAD");
+  Serial.print(" -> ");
+  Serial.println(to == STATE_GOOD ? "GOOD" :
+                 to == STATE_WARN ? "WARN" : "BAD");
+
+  Serial.print("Current State: ");
+  Serial.println(to == STATE_GOOD ? "GOOD (centered)" :
+                 to == STATE_WARN ? "WARN (slightly down)" :
+                 "BAD (fully down)");
 }
 
 PostureState parseStateFromString(const String &str) {
   if (str == "GOOD") return STATE_GOOD;
   if (str == "WARN") return STATE_WARN;
   if (str == "BAD")  return STATE_BAD;
-  return currentState;
+  return currentState;  // unknown input: stay in current state
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Posture Pal (continuous servo mode)");
-  Serial.println("Type GOOD / WARN / BAD in Serial Monitor.");
+  Serial.println("Posture Pal - Smooth Servo Mode");
+  Serial.println("Type GOOD / WARN / BAD (then Enter) in Serial Monitor.");
 
   servoEars.attach(PIN_EARS);
-  servoEars.write(SPEED_STOP); // start stopped
+  servoEars.write(ANGLE_GOOD);  // start centered
 }
 
 void loop() {
@@ -73,7 +91,7 @@ void loop() {
         applyTransition(currentState, newState);
         currentState = newState;
       } else {
-        Serial.print("Same state: ");
+        Serial.print("State unchanged: ");
         Serial.println(input);
       }
     }
