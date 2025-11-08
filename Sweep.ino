@@ -4,16 +4,15 @@ Servo servoEars;
 
 const int PIN_EARS = 9;
 
-// For continuous servos:
-// 90 = stop
-// <90 = spin one way
-// >90 = spin the other way
-const int SPEED_FORWARD = 70;  // adjust for slow forward
-const int SPEED_BACK    = 110; // adjust for slow reverse
-const int SPEED_STOP    = 90;
+// --- Servo speed settings (tune these) ---
+const int SPEED_STOP     = 90;
+const int SPEED_FORWARD  = 82;   // forward = ear tilts down
+const int SPEED_BACKWARD = 98;   // backward = ear tilts up
 
-// How long to spin (ms)
-const int MOVE_TIME = 400;  // tweak to match how far it “tilts”
+// --- Timing (tune these in milliseconds) ---
+const int MOVE_SMALL = 250;   // small movement (warn)
+const int MOVE_LARGE = 500;   // large movement (bad)
+const int MOVE_RESET = 700;   // go all the way back to "good" center
 
 // ----- State machine -----
 enum PostureState {
@@ -23,26 +22,50 @@ enum PostureState {
 };
 
 PostureState currentState = STATE_GOOD;
-PostureState lastState    = STATE_GOOD;
+
+void moveServo(int speed, int duration) {
+  servoEars.write(speed);
+  delay(duration);
+  servoEars.write(SPEED_STOP);
+}
 
 void applyTransition(PostureState from, PostureState to) {
-  // From GOOD → WARN → BAD: spin forward
-  // From BAD → WARN → GOOD: spin backward
-  int speed = SPEED_STOP;
+  Serial.print("Transition: ");
+  Serial.print(from == STATE_GOOD ? "GOOD" :
+               from == STATE_WARN ? "WARN" : "BAD");
+  Serial.print(" -> ");
+  Serial.println(to == STATE_GOOD ? "GOOD" :
+                 to == STATE_WARN ? "WARN" : "BAD");
 
-  if ((from == STATE_GOOD && to == STATE_WARN) ||
-      (from == STATE_WARN && to == STATE_BAD)) {
-    speed = SPEED_FORWARD;        // forward
+  // going toward worse posture → move down
+  if ((from == STATE_GOOD && to == STATE_WARN)) {
+    moveServo(SPEED_FORWARD, MOVE_SMALL);
   } 
-  else if ((from == STATE_WARN && to == STATE_GOOD) ||
-           (from == STATE_BAD && to == STATE_GOOD) ||
-           (from == STATE_BAD && to == STATE_WARN)) {
-    speed = SPEED_BACK;           // backward
+  else if ((from == STATE_WARN && to == STATE_BAD)) {
+    moveServo(SPEED_FORWARD, MOVE_LARGE - MOVE_SMALL);
+  }
+  // going toward better posture → move up
+  else if ((from == STATE_BAD && to == STATE_WARN)) {
+    moveServo(SPEED_BACKWARD, MOVE_LARGE - MOVE_SMALL);
+  } 
+  else if ((from == STATE_WARN && to == STATE_GOOD)) {
+    moveServo(SPEED_BACKWARD, MOVE_SMALL);
+  }
+  else if ((from == STATE_BAD && to == STATE_GOOD)) {
+    // full reset to known center
+    moveServo(SPEED_BACKWARD, MOVE_RESET);
+  }
+  else if (to == STATE_GOOD) {
+    // any other path ending in GOOD → reset to known spot
+    moveServo(SPEED_BACKWARD, MOVE_RESET);
   }
 
-  servoEars.write(speed);
-  delay(MOVE_TIME);               // spin for some time
-  servoEars.write(SPEED_STOP);    // stop
+  // Stop and echo final state
+  servoEars.write(SPEED_STOP);
+  Serial.print("State: ");
+  Serial.println(to == STATE_GOOD ? "GOOD (centered)" :
+                 to == STATE_WARN ? "WARN (slightly down)" :
+                 "BAD (fully down)");
 }
 
 PostureState parseStateFromString(const String &str) {
@@ -54,28 +77,27 @@ PostureState parseStateFromString(const String &str) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Posture Pal (continuous servo mode)");
-  Serial.println("Type GOOD / WARN / BAD in Serial Monitor.");
-
+  Serial.println("Posture Pal - Timed Continuous Servo Mode");
+  Serial.println("Type GOOD / WARN / BAD (then Enter) in Serial Monitor.");
+  
   servoEars.attach(PIN_EARS);
-  servoEars.write(SPEED_STOP); // start stopped
+  servoEars.write(SPEED_STOP);
 }
 
 void loop() {
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
     input.trim();
-
     if (input.length() > 0) {
       PostureState newState = parseStateFromString(input);
-
       if (newState != currentState) {
         applyTransition(currentState, newState);
         currentState = newState;
       } else {
-        Serial.print("Same state: ");
+        Serial.print("State unchanged: ");
         Serial.println(input);
       }
     }
   }
 }
+
