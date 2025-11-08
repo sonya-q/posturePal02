@@ -6,45 +6,65 @@ import subprocess
 import platform
 import serial
 import threading
-import subprocess
 
+ARDUINO_PORT = 'COM4' 
+ARDUINO_BAUDRATE = 9600
+
+# Initialize Arduino connection
+try:
+    arduino = serial.Serial(ARDUINO_PORT, ARDUINO_BAUDRATE, timeout=1)
+    time.sleep(2)  # Wait for Arduino to initialize
+    print(f"✓ Connected to Arduino on {ARDUINO_PORT}")
+    arduino_connected = True
+except Exception as e:
+    print(f"⚠ Arduino not connected: {e}")
+    print("  Running in simulation mode...")
+    arduino = None
+    arduino_connected = False
+
+def send_to_arduino(command):
+    """Send GOOD or BAD command to Arduino"""
+    if arduino_connected and arduino:
+        try:
+            arduino.write(f"{command}\n".encode())
+            print(f"→ Sent to Arduino: {command}")
+        except Exception as e:
+            print(f"Arduino communication error: {e}")
+    else:
+        print(f"[SIMULATED] Would send to Arduino: {command}")
 
 def play_sound():
-    # Replace with full path if necessary
-    subprocess.run(["afplay", "dog_bark.mp3"])
+    """Play alert sound"""
+    try:
+        subprocess.run(["afplay", "dog_bark.mp3"])
+    except:
+        print("🔊 [Sound would play here]")
 
+# Posture tracking variables
 bark_played = False
 bad_posture_start = None
 good_posture_start = None
 arduino_posture_state = "GOOD"  # Last posture sent to Arduino
-BAD_POSTURE_DELAY = 5          # seconds
-GOOD_POSTURE_DELAY = 5          # seconds
+BAD_POSTURE_DELAY = 5          # seconds before triggering bad posture alert
+GOOD_POSTURE_DELAY = 5         # seconds of good posture before sending GOOD signal
+
 # Initialize calibration variables
 is_calibrated = False
 calibration_frames = 0
 calibration_shoulder_angles = []
 calibration_neck_angles = []
-calibration_forward_distances = []  # NEW: Horizontal distance (forward head)
-calibration_slouch_distances = []   # NEW: Forward shoulder distance
-calibration_spine_curvatures = []   # NEW: Spine curvature values
+calibration_forward_distances = []
+calibration_slouch_distances = []
+calibration_spine_curvatures = []
 shoulder_threshold = 0
 neck_threshold = 0
-forward_head_threshold = 0  # NEW
-slouch_threshold = 0        # NEW
-spine_curvature_threshold = 0   # NEW: For detecting excessive spine curvature
+forward_head_threshold = 0
+slouch_threshold = 0
+spine_curvature_threshold = 0
 CALIBRATION_TARGET = 60
 
-
 def calculate_angle(a, b, c):
-    """
-    Calculate the angle between three points.
-    Args:
-        a: First point (x,y)
-        b: Mid point (x,y)
-        c: End point (x,y)
-    Returns:
-        angle: The angle in degrees
-    """
+    """Calculate the angle between three points."""
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
@@ -63,27 +83,15 @@ def calculate_distance(p1, p2):
     return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 def calculate_spine_curvature(points):
-    """
-    Calculate spine curvature by fitting a polynomial curve through spine points.
-    Args:
-        points: List of (x, y) tuples representing spine points from top to bottom
-    Returns:
-        curvature: A measure of how curved the spine is (higher = more curved)
-    """
+    """Calculate spine curvature by fitting a polynomial curve."""
     if len(points) < 3:
         return 0
     
-    # Extract x and y coordinates
     x_coords = np.array([p[0] for p in points])
     y_coords = np.array([p[1] for p in points])
     
-    # Fit a 2nd degree polynomial (quadratic curve) through the points
-    # This gives us a smooth curve representation of the spine
     coeffs = np.polyfit(y_coords, x_coords, 2)
-    
-    # The curvature is represented by the coefficient of the quadratic term
-    # Higher absolute value = more curved spine
-    curvature = abs(coeffs[0]) * 10000  # Scale for readability
+    curvature = abs(coeffs[0]) * 10000
     
     return curvature
 
@@ -98,7 +106,7 @@ def draw_angle(frame, point1, point2, point3, angle, color=(0, 255, 0)):
 
 def send_macos_notification(title, message, subtitle=""):
     """Send a notification on macOS using osascript."""
-    if platform.system() == "Darwin":  # macOS
+    if platform.system() == "Darwin":
         script = f'''
         display notification "{message}" with title "{title}" subtitle "{subtitle}" sound name "Glass"
         '''
@@ -107,31 +115,26 @@ def send_macos_notification(title, message, subtitle=""):
         except Exception as e:
             print(f"Notification error: {e}")
     else:
-        # For non-macOS systems, just print
         print(f"{title}: {message}")
 
 # Initialize MediaPipe Pose and webcam
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-
-# Option 1: Use IP Webcam (replace with your phone's IP address)
-# Get IP from the app, usually shows as http://192.168.x.x:8080
-# ip_camera_url = "http://192.168.1.100:8080/video"
-# cap = cv2.VideoCapture(ip_camera_url)
-
-# Option 2: Use regular webcam (default)
 cap = cv2.VideoCapture(0)
 
 # Initialize alert variables
 last_alert_time = 0
-alert_cooldown = 30.0  # Increased to 30 seconds to avoid notification spam
+alert_cooldown = 30.0
 
-print("Starting posture monitor with improved side-view detection...")
-print("Please maintain GOOD POSTURE for calibration:")
+print("\n" + "="*60)
+print("Starting Posture Monitor with Arduino Integration")
+print("="*60)
+print("\nCalibration Instructions:")
 print("  • Sit up straight")
 print("  • Head back (ears over shoulders)")
 print("  • Chest up, shoulders back")
+print("  • Maintain good posture for 60 frames\n")
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -162,15 +165,10 @@ while cap.isOpened():
                    int(landmarks[mp_pose.PoseLandmark.LEFT_HIP].y * h))
         right_hip = (int(landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x * w),
                     int(landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y * h))
-        
-        # NEW: Get spine points for curve detection
-        # We'll use multiple points along the spine for better curve fitting
         left_elbow = (int(landmarks[mp_pose.PoseLandmark.LEFT_ELBOW].x * w),
                      int(landmarks[mp_pose.PoseLandmark.LEFT_ELBOW].y * h))
         right_elbow = (int(landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW].x * w),
                       int(landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW].y * h))
-        
-        # Get additional spine reference points
         left_knee = (int(landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x * w),
                     int(landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y * h))
         right_knee = (int(landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].x * w),
@@ -188,8 +186,7 @@ while cap.isOpened():
         knee_midpoint = ((left_knee[0] + right_knee[0])//2,
                         (left_knee[1] + right_knee[1])//2)
         
-        # Create spine points from top to bottom for curve fitting
-        # Using neck, upper back (between shoulder and elbow), mid back, lower back, hips
+        # Create spine points
         upper_back = ((shoulder_midpoint[0] + elbow_midpoint[0])//2,
                      (shoulder_midpoint[1] + elbow_midpoint[1])//2)
         lower_back = ((elbow_midpoint[0] + hip_midpoint[0])//2,
@@ -203,48 +200,34 @@ while cap.isOpened():
             hip_midpoint
         ]
 
-        # EXISTING: Front-view angles (shoulder alignment)
+        # Calculate measurements
         shoulder_angle = calculate_angle(left_shoulder, right_shoulder, (right_shoulder[0], 0))
         neck_angle = calculate_angle(ear_midpoint, shoulder_midpoint, (shoulder_midpoint[0], 0))
-
-        # NEW: Side-view measurements using DISTANCE not angle
-        # 1. Forward Head Distance: horizontal distance between ear and shoulder
         forward_head_distance = abs(ear_midpoint[0] - shoulder_midpoint[0])
-        
-        # 2. Slouch Distance: horizontal distance between shoulder and hip
         slouch_distance = abs(shoulder_midpoint[0] - hip_midpoint[0])
-        
-        # 3. Spine Curvature: Calculate actual curve through multiple spine points
         spine_curvature = calculate_spine_curvature(spine_points)
         
-        # Draw visual indicators for distances
+        # Draw visual indicators
         cv2.line(frame, ear_midpoint, (shoulder_midpoint[0], ear_midpoint[1]), (0, 255, 255), 2)
         cv2.line(frame, shoulder_midpoint, (hip_midpoint[0], shoulder_midpoint[1]), (255, 0, 255), 2)
         
-        # Draw smooth spine curve visualization
-        # Draw the actual fitted curve
+        # Draw spine curve
         y_coords = np.array([p[1] for p in spine_points])
         x_coords = np.array([p[0] for p in spine_points])
         
         if len(spine_points) >= 3:
-            # Fit polynomial
             coeffs = np.polyfit(y_coords, x_coords, 2)
-            
-            # Generate smooth curve points
             y_smooth = np.linspace(y_coords.min(), y_coords.max(), 50)
             x_smooth = np.polyval(coeffs, y_smooth)
             
-            # Draw the smooth curve
             for i in range(len(x_smooth) - 1):
                 pt1 = (int(x_smooth[i]), int(y_smooth[i]))
                 pt2 = (int(x_smooth[i+1]), int(y_smooth[i+1]))
                 cv2.line(frame, pt1, pt2, (0, 255, 0), 3)
         
-        # Draw circles at spine measurement points
         for point in spine_points:
             cv2.circle(frame, point, 5, (0, 255, 0), -1)
         
-        # Highlight key points
         cv2.circle(frame, ear_midpoint, 7, (0, 255, 255), -1)
         cv2.circle(frame, shoulder_midpoint, 7, (255, 255, 0), -1)
         cv2.circle(frame, hip_midpoint, 7, (255, 0, 255), -1)
@@ -255,7 +238,7 @@ while cap.isOpened():
             calibration_neck_angles.append(neck_angle)
             calibration_forward_distances.append(forward_head_distance)
             calibration_slouch_distances.append(slouch_distance)
-            calibration_spine_curvatures.append(spine_curvature)  # NEW
+            calibration_spine_curvatures.append(spine_curvature)
             calibration_frames += 1
             
             progress_text = f"Calibrating... {calibration_frames}/{CALIBRATION_TARGET}"
@@ -266,7 +249,6 @@ while cap.isOpened():
             cv2.putText(frame, instruction_text, (10, 70),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
             
-            # Show measurements
             cv2.putText(frame, f"Shoulder angle: {shoulder_angle:.1f}°", (10, 110),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             cv2.putText(frame, f"Neck angle: {neck_angle:.1f}°", (10, 135),
@@ -279,16 +261,11 @@ while cap.isOpened():
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
             if calibration_frames == CALIBRATION_TARGET:
-                # For angles: lower = bad, so threshold is below mean (more lenient)
                 shoulder_threshold = np.mean(calibration_shoulder_angles) * 0.75
                 neck_threshold = np.mean(calibration_neck_angles) * 0.75
-                
-                # For distances: higher = bad (more forward), so threshold is above mean (much more lenient)
                 forward_head_threshold = np.mean(calibration_forward_distances) * 1.8
                 slouch_threshold = np.mean(calibration_slouch_distances) * 1.5
-                
-                # For spine curvature: higher = more curved/hunched (bad posture)
-                spine_curvature_threshold = np.mean(calibration_spine_curvatures) * 1.5  # Allow 50% more curvature
+                spine_curvature_threshold = np.mean(calibration_spine_curvatures) * 1.5
                 
                 is_calibrated = True
                 print(f"\n✓ Calibration complete!")
@@ -296,17 +273,15 @@ while cap.isOpened():
                 print(f"  Neck angle threshold: {neck_threshold:.1f}°")
                 print(f"  Forward head threshold: {forward_head_threshold:.1f}px")
                 print(f"  Slouch threshold: {slouch_threshold:.1f}px")
-                print(f"  Spine curvature threshold: {spine_curvature_threshold:.2f}")
+                print(f"  Spine curvature threshold: {spine_curvature_threshold:.2f}\n")
         
         # Posture monitoring phase
-        # --- Posture monitoring phase ---
         elif is_calibrated:
-
             current_time = time.time()
             posture_issues = []
             detailed_corrections = []
 
-            # Check angles (lower is bad)
+            # Check all posture metrics
             if shoulder_angle < shoulder_threshold:
                 posture_issues.append("shoulders")
                 detailed_corrections.append("SHOULDERS: Pull back and down, open chest")
@@ -315,7 +290,6 @@ while cap.isOpened():
                 posture_issues.append("neck tilt")
                 detailed_corrections.append("NECK: Keep head level, don't tilt")
 
-            # Check distances (higher is bad)
             if forward_head_distance > forward_head_threshold:
                 posture_issues.append("forward head")
                 detailed_corrections.append("HEAD: Too far forward - tuck chin, align ears over shoulders")
@@ -324,35 +298,34 @@ while cap.isOpened():
                 posture_issues.append("slouching")
                 detailed_corrections.append("SPINE: Slouching forward - sit up tall, engage core")
 
-            # Check spine curvature (higher = bad)
             if spine_curvature > spine_curvature_threshold:
                 posture_issues.append("spine curvature")
                 detailed_corrections.append("BACK: Spine too curved - straighten upper back, open chest")
 
-            # --- Track bad posture duration and trigger audio ---
+            # Handle BAD posture duration and Arduino signal
             if posture_issues:
                 if bad_posture_start is None:
                     bad_posture_start = current_time
-                elif current_time - bad_posture_start >= BAD_POSTURE_DELAY and not bark_played:
-                    # Play audio once in a separate thread
-                    threading.Thread(target=play_sound).start()
-                    bark_played = True
-            else:
-                bad_posture_start = None
-
-            # --- Set status and color ---
-            if posture_issues:
+                    good_posture_start = None  # Reset good posture timer
+                elif current_time - bad_posture_start >= BAD_POSTURE_DELAY:
+                    if not bark_played:
+                        # Play audio and send BAD signal to Arduino
+                        threading.Thread(target=play_sound).start()
+                        bark_played = True
+                        
+                        if arduino_posture_state != "BAD":
+                            send_to_arduino("BAD")
+                            arduino_posture_state = "BAD"
+                
                 status = "Poor Posture ⚠"
-                color = (0, 0, 255)  # Red
+                color = (0, 0, 255)
 
-                # Send macOS notification only if cooldown has passed
                 if current_time - last_alert_time > alert_cooldown:
                     print(f"\n⚠️  POSTURE CORRECTION NEEDED:")
                     for correction in detailed_corrections:
                         print(f"   • {correction}")
                     print()
 
-                    # Send notification
                     issue_summary = ", ".join(posture_issues)
                     main_correction = detailed_corrections[0] if detailed_corrections else "Check your posture"
                     send_macos_notification(
@@ -360,24 +333,39 @@ while cap.isOpened():
                         message=main_correction,
                         subtitle=f"Issues: {issue_summary}"
                     )
-
                     last_alert_time = current_time
 
-                # Display corrections on screen (larger, more readable)
+                # Display corrections
                 y_offset = 100
-                corr_font = cv2.FONT_HERSHEY_SIMPLEX
-                corr_scale = 0.9
-                corr_thickness = 3
-                corr_color = (0, 165, 255)
-                line_height = int(36 * corr_scale) + corr_thickness
                 for correction in detailed_corrections:
                     cv2.putText(frame, correction, (10, y_offset),
-                                corr_font, corr_scale, corr_color, corr_thickness, cv2.LINE_AA)
-                    y_offset += line_height
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 165, 255), 3, cv2.LINE_AA)
+                    y_offset += 39
+            
             else:
-                status = "Good Posture ✓"
-                color = (0, 255, 0)  # Green
+                # GOOD posture detected
+                bad_posture_start = None
                 bark_played = False
+                
+                # Track good posture duration
+                if good_posture_start is None:
+                    good_posture_start = current_time
+                elif current_time - good_posture_start >= GOOD_POSTURE_DELAY:
+                    # Send GOOD signal after 5 seconds of good posture
+                    if arduino_posture_state != "GOOD":
+                        send_to_arduino("GOOD")
+                        arduino_posture_state = "GOOD"
+                
+                status = "Good Posture ✓"
+                color = (0, 255, 0)
+                
+                # Show good posture timer
+                if good_posture_start:
+                    good_duration = current_time - good_posture_start
+                    if good_duration < GOOD_POSTURE_DELAY:
+                        timer_text = f"Good posture: {good_duration:.1f}s / {GOOD_POSTURE_DELAY}s"
+                        cv2.putText(frame, timer_text, (10, 100),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             # Display status and measurements
             cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
@@ -385,12 +373,21 @@ while cap.isOpened():
                                 f"FH:{forward_head_distance:.0f}px Sl:{slouch_distance:.0f}px "
                                 f"SC:{spine_curvature:.2f}",
                         (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
+            
+            # Display Arduino status
+            arduino_status = f"Arduino: {arduino_posture_state}" if arduino_connected else "Arduino: Not Connected"
+            cv2.putText(frame, arduino_status, (w - 250, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-    # Display the frame
-    cv2.imshow('Posture Monitor - Fixed Side View', frame)
+    cv2.imshow('Posture Monitor - Arduino Integration', frame)
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+# Cleanup
 cap.release()
 cv2.destroyAllWindows()
+if arduino_connected and arduino:
+    arduino.close()
+    print("\n✓ Arduino connection closed")
+print("Posture monitor stopped.")
