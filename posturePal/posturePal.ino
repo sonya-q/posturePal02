@@ -15,6 +15,15 @@ const int SPEED_BACKWARD = 98;   // backward = tilt up
 const int STEP_TIME = 250;   // one "step" time (good→warn or warn→bad)
 const int RESET_TIME = 600;  // full reset to center (good)
 
+// --- Tail timing ---
+const unsigned long GOOD_INTERVAL = 30000;  // 30 seconds
+const unsigned long WARN_INTERVAL = 60000;  // 60 seconds
+const unsigned long TAIL_SWEEP_DURATION = 1000;  // 1 second per direction
+
+// Tail positions
+const int TAIL_LEFT   = 60;
+const int TAIL_RIGHT  = 120;
+
 // ----- State machine -----
 enum PostureState {
   STATE_GOOD,
@@ -23,6 +32,12 @@ enum PostureState {
 };
 
 PostureState currentState = STATE_GOOD;
+
+// --- Tail-specific timing ---
+unsigned long lastTailStartTime = 0;
+unsigned long tailSweepStartTime = 0;
+bool tailSweeping = false;
+bool tailGoingRight = true;
 
 void moveServo(int speed, int duration) {
   servoEars.write(speed);
@@ -97,6 +112,10 @@ void setup() {
   Serial.println("Type GOOD / WARN / BAD (then Enter) in Serial Monitor.");
 
   servoEars.attach(PIN_EARS);
+
+  servoTail.attach(PIN_TAIL);
+  servoTail.write(TAIL_LEFT);
+
   servoEars.write(SPEED_STOP);
 }
 
@@ -113,6 +132,42 @@ void loop() {
         Serial.print("State unchanged: ");
         Serial.println(input);
       }
+    }
+  }
+  handleTailSweep();
+}
+
+void handleTailSweep() {
+  unsigned long now = millis();
+  unsigned long interval = 0;
+  
+  // Determine interval based on state
+  if (currentState == STATE_GOOD) interval = GOOD_INTERVAL;
+  else if (currentState == STATE_WARN) interval = WARN_INTERVAL;
+  else interval = 0; // BAD → no movement
+  
+  // Check if it's time to start a new sweep
+  if (!tailSweeping && interval > 0 && now - lastTailStartTime >= interval) {
+    tailSweeping = true;
+    tailSweepStartTime = now;
+    servoTail.write(TAIL_RIGHT);  // start sweep to the right
+    tailGoingRight = true;
+  }
+  
+  // Handle ongoing sweep
+  if (tailSweeping) {
+    unsigned long sweepElapsed = now - tailSweepStartTime;
+    
+    // After 1 second, reverse direction
+    if (tailGoingRight && sweepElapsed >= TAIL_SWEEP_DURATION) {
+      servoTail.write(TAIL_LEFT);  // sweep back to left
+      tailGoingRight = false;
+      tailSweepStartTime = now;  // reset timer for return sweep
+    }
+    // After another 1 second, finish the sweep
+    else if (!tailGoingRight && sweepElapsed >= TAIL_SWEEP_DURATION) {
+      tailSweeping = false;
+      lastTailStartTime = now;  // mark when this sweep finished
     }
   }
 }
