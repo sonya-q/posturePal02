@@ -41,7 +41,7 @@ void applyState(PostureState s) {
   else if (s == STATE_BAD) {
     servoEars.write(EARS_BAD_ANGLE);
     servoTail.write(TAIL_BAD_ANGLE);
-    Serial.println("State: BAD → ears fully down, tail strong move");
+    Serial.println("State: BAD → ears fully down, tail strong move"); // want continuous motion? 
   }
 }
 
