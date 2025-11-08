@@ -7,12 +7,11 @@ const int PIN_EARS = 9;
 // --- Servo speed settings (tune these) ---
 const int SPEED_STOP     = 90;
 const int SPEED_FORWARD  = 82;   // forward = tilt down
-const int SPEED_BACKWARD = 90;   // backward = tilt up
+const int SPEED_BACKWARD = 92;   // backward = tilt up
 
 // --- Timing (tune these in milliseconds) ---
-const int MOVE_SMALL = 250;   // small movement (warn)
-const int MOVE_LARGE = 500;   // large movement (bad)
-const int MOVE_RESET = 700;   // go all the way back to "good" center
+const int STEP_TIME = 250;   // one "step" time (good→warn or warn→bad)
+const int RESET_TIME = 600;  // full reset to center (good)
 
 // ----- State machine -----
 enum PostureState {
@@ -37,39 +36,32 @@ void applyTransition(PostureState from, PostureState to) {
   Serial.println(to == STATE_GOOD ? "GOOD" :
                  to == STATE_WARN ? "WARN" : "BAD");
 
-  // default: stop
-  servoEars.write(SPEED_STOP);
-
-  // going downward (toward worse posture)
-  if ((from == STATE_GOOD && to == STATE_WARN)) {
-    moveServo(SPEED_FORWARD, MOVE_SMALL);
-  } 
-  else if ((from == STATE_WARN && to == STATE_BAD)) {
-    moveServo(SPEED_FORWARD, MOVE_LARGE - MOVE_SMALL);
+  // downward (toward worse posture)
+  if ((from == STATE_GOOD && to == STATE_WARN) ||
+      (from == STATE_WARN && to == STATE_BAD)) {
+    moveServo(SPEED_FORWARD, STEP_TIME);
   }
-  else if ((from == STATE_GOOD && to == STATE_BAD)) {
-    // full downward move at once
-    moveServo(SPEED_FORWARD, MOVE_LARGE);
+  else if (from == STATE_GOOD && to == STATE_BAD) {
+    // full down: double the step
+    moveServo(SPEED_FORWARD, STEP_TIME * 2);
   }
 
-  // going upward (toward better posture)
-  else if ((from == STATE_BAD && to == STATE_WARN)) {
-    moveServo(SPEED_BACKWARD, MOVE_LARGE - MOVE_SMALL);
-  } 
-  else if ((from == STATE_WARN && to == STATE_GOOD)) {
-    moveServo(SPEED_BACKWARD, MOVE_SMALL);
-  } 
-  else if ((from == STATE_BAD && to == STATE_GOOD)) {
-    moveServo(SPEED_BACKWARD, MOVE_RESET);
+  // upward (toward better posture)
+  else if ((from == STATE_BAD && to == STATE_WARN) ||
+           (from == STATE_WARN && to == STATE_GOOD)) {
+    moveServo(SPEED_BACKWARD, STEP_TIME);
+  }
+  else if (from == STATE_BAD && to == STATE_GOOD) {
+    // full reset: double the step time
+    moveServo(SPEED_BACKWARD, STEP_TIME * 2);
   }
 
-  // Force reset if we somehow end at GOOD
+  // Ensure consistent reset when returning to GOOD
   if (to == STATE_GOOD) {
     servoEars.write(SPEED_BACKWARD);
-    delay(MOVE_RESET / 2);
+    delay(RESET_TIME / 4);  // gentle settle at center
+    servoEars.write(SPEED_STOP);
   }
-
-  servoEars.write(SPEED_STOP);
 
   Serial.print("State: ");
   Serial.println(to == STATE_GOOD ? "GOOD (centered)" :
@@ -86,7 +78,7 @@ PostureState parseStateFromString(const String &str) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Posture Pal - Timed Continuous Servo Mode");
+  Serial.println("Posture Pal - Even Step Continuous Servo Mode");
   Serial.println("Type GOOD / WARN / BAD (then Enter) in Serial Monitor.");
 
   servoEars.attach(PIN_EARS);
