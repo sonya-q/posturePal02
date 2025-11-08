@@ -2,7 +2,7 @@
 
 **Posture Pal** is an interactive, posture-correcting desk companion created for **BoxBots 2025**, a hardware hackathon focused on robotics and human-centered design.
 
-Teammates: Sonya Qu, Ariel Liu, Mansi Katarey, Alexandra
+Teammates: Sonya Qu, Ariel Liu, Mansi Katarey, Alexandra Roszczenko
 
 Created for: **BoxBots** - Robotics And Cardboard Hackathon
 
