@@ -20,9 +20,10 @@ const unsigned long GOOD_INTERVAL = 30000;  // 30 seconds
 const unsigned long WARN_INTERVAL = 60000;  // 60 seconds
 const unsigned long TAIL_SWEEP_DURATION = 1000;  // 1 second per direction
 
-// Tail positions
-const int TAIL_LEFT   = 60;
-const int TAIL_RIGHT  = 120;
+// Tail speeds (for continuous rotation servo)
+const int TAIL_STOP = 90;
+const int TAIL_CLOCKWISE = 82;      // adjust if needed
+const int TAIL_COUNTER = 98;         // adjust if needed
 
 // ----- State machine -----
 enum PostureState {
@@ -34,10 +35,13 @@ enum PostureState {
 PostureState currentState = STATE_GOOD;
 
 // --- Tail-specific timing ---
-unsigned long lastTailStartTime = 0;
-unsigned long tailSweepStartTime = 0;
-bool tailSweeping = false;
-bool tailGoingRight = true;
+unsigned long tailCycleStartTime = 0;
+enum TailState {
+  TAIL_IDLE,
+  TAIL_CLOCKWISE,
+  TAIL_COUNTER
+};
+TailState tailState = TAIL_IDLE;
 
 void moveServo(int speed, int duration) {
   servoEars.write(speed);
@@ -114,7 +118,7 @@ void setup() {
   servoEars.attach(PIN_EARS);
 
   servoTail.attach(PIN_TAIL);
-  servoTail.write(TAIL_LEFT);
+  servoTail.write(TAIL_STOP);  // make sure it starts stopped
 
   servoEars.write(SPEED_STOP);
 }
@@ -139,35 +143,47 @@ void loop() {
 
 void handleTailSweep() {
   unsigned long now = millis();
-  unsigned long interval = 0;
+  unsigned long elapsed = now - tailCycleStartTime;
   
-  // Determine interval based on state
-  if (currentState == STATE_GOOD) interval = GOOD_INTERVAL;
-  else if (currentState == STATE_WARN) interval = WARN_INTERVAL;
-  else interval = 0; // BAD → no movement
-  
-  // Check if it's time to start a new sweep
-  if (!tailSweeping && interval > 0 && now - lastTailStartTime >= interval) {
-    tailSweeping = true;
-    tailSweepStartTime = now;
-    servoTail.write(TAIL_RIGHT);  // start sweep to the right
-    tailGoingRight = true;
+  // Determine cycle interval based on state
+  unsigned long cycleInterval = 0;
+  if (currentState == STATE_GOOD) cycleInterval = GOOD_INTERVAL;
+  else if (currentState == STATE_WARN) cycleInterval = WARN_INTERVAL;
+  else {
+    // BAD state - make sure tail is stopped
+    servoTail.write(TAIL_STOP);
+    tailState = TAIL_IDLE;
+    return;
   }
   
-  // Handle ongoing sweep
-  if (tailSweeping) {
-    unsigned long sweepElapsed = now - tailSweepStartTime;
-    
-    // After 1 second, reverse direction
-    if (tailGoingRight && sweepElapsed >= TAIL_SWEEP_DURATION) {
-      servoTail.write(TAIL_LEFT);  // sweep back to left
-      tailGoingRight = false;
-      tailSweepStartTime = now;  // reset timer for return sweep
-    }
-    // After another 1 second, finish the sweep
-    else if (!tailGoingRight && sweepElapsed >= TAIL_SWEEP_DURATION) {
-      tailSweeping = false;
-      lastTailStartTime = now;  // mark when this sweep finished
-    }
+  // State machine for tail movement
+  switch (tailState) {
+    case TAIL_IDLE:
+      // Wait for the full cycle interval
+      if (elapsed >= cycleInterval) {
+        // Start new wag cycle
+        tailState = TAIL_CLOCKWISE;
+        tailCycleStartTime = now;
+        servoTail.write(TAIL_CLOCKWISE);
+      }
+      break;
+      
+    case TAIL_CLOCKWISE:
+      // Rotate clockwise for 1 second
+      if (elapsed >= TAIL_SWEEP_DURATION) {
+        tailState = TAIL_COUNTER;
+        tailCycleStartTime = now;
+        servoTail.write(TAIL_COUNTER);
+      }
+      break;
+      
+    case TAIL_COUNTER:
+      // Rotate counter-clockwise for 1 second
+      if (elapsed >= TAIL_SWEEP_DURATION) {
+        tailState = TAIL_IDLE;
+        tailCycleStartTime = now;
+        servoTail.write(TAIL_STOP);  // STOP the tail
+      }
+      break;
   }
 }
