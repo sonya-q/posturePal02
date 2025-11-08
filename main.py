@@ -17,7 +17,7 @@ bark_played = False
 bad_posture_start = None
 good_posture_start = None
 arduino_posture_state = "GOOD"  # Last posture sent to Arduino
-BAD_POSTURE_DELAY = 3          # seconds
+BAD_POSTURE_DELAY = 5          # seconds
 GOOD_POSTURE_DELAY = 5          # seconds
 # Initialize calibration variables
 is_calibrated = False
