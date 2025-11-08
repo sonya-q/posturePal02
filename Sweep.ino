@@ -7,7 +7,7 @@ const int PIN_EARS = 9;
 // --- Servo speed settings (tune these) ---
 const int SPEED_STOP     = 90;
 const int SPEED_FORWARD  = 82;   // forward = tilt down
-const int SPEED_BACKWARD = 94;   // backward = tilt up
+const int SPEED_BACKWARD = 92;   // backward = tilt up
 
 // --- Timing (tune these in milliseconds) ---
 const int STEP_TIME = 250;   // one "step" time (good→warn or warn→bad)
