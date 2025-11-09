@@ -12,14 +12,16 @@ arduino = serial.Serial('/dev/tty.usbmodemXXXX', 9600)  # Adjust the port as nec
 def play_sound():
     subprocess.run(["afplay", "dog_bark.mp3"])
 
-def send_signal(status):
-    """Send posture status to Arduino."""
-    if status == "GOOD":
-        arduino.write(b'GOOD')  # Send good posture signal to Arduino
-    elif status == "WARN":
-        arduino.write(b'WARN')  # Send warning signal to Arduino
-    elif status == "BAD":
-        arduino.write(b'BAD')    # Send bad posture signal to Arduino
+def send_to_arduino(command):
+    """Send GOOD or BAD command to Arduino"""
+    if arduino_connected and arduino:
+        try:
+            arduino.write(f"{command}\n".encode())
+            print(f"→ Sent to Arduino: {command}")
+        except Exception as e:
+            print(f"Arduino communication error: {e}")
+    else:
+        print(f"[SIMULATED] Would send to Arduino: {command}")
 
 bark_played = False
 bad_posture_start = None
@@ -309,47 +311,47 @@ while cap.isOpened():
             # HARDCODED ARDUINO SIGNALS - Based on time elapsed, not posture
             arduino_elapsed = current_time - arduino_start_time
 
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(3)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(7)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10) 
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(10)
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(3)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(7)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10) 
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(10)
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(3)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(7)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10) 
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("BAD") 
+            send_to_arduino("BAD") 
             time(10)
-            send_signal("WARN")
+            send_to_arduino("WARN")
             time(5)
-            send_signal("GOOD")
+            send_to_arduino("GOOD")
             time(10)
             # if arduino_elapsed < ARDUINO_GOOD_DURATION:
             #     # 0-5 seconds: Send GOOD
