@@ -308,19 +308,61 @@ while cap.isOpened():
 
             # HARDCODED ARDUINO SIGNALS - Based on time elapsed, not posture
             arduino_elapsed = current_time - arduino_start_time
-            
-            if arduino_elapsed < ARDUINO_GOOD_DURATION:
-                # 0-5 seconds: Send GOOD
-                send_signal("GOOD")
-                arduino_status = f"Arduino: GOOD ({ARDUINO_GOOD_DURATION - arduino_elapsed:.1f}s left)"
-            elif arduino_elapsed < ARDUINO_WARN_DURATION:
-                # 5-10 seconds: Send WARN
-                send_signal("WARN")
-                arduino_status = f"Arduino: WARN ({ARDUINO_WARN_DURATION - arduino_elapsed:.1f}s left)"
-            else:
-                # 10+ seconds: Send BAD
-                send_signal("BAD")
-                arduino_status = f"Arduino: BAD ({arduino_elapsed - ARDUINO_WARN_DURATION:.1f}s)"
+
+            send_signal("GOOD")
+            time(3)
+            send_signal("WARN")
+            time(7)
+            send_signal("BAD") 
+            time(10) 
+            send_signal("WARN")
+            time(5)
+            send_signal("BAD") 
+            time(10)
+            send_signal("WARN")
+            time(5)
+            send_signal("GOOD")
+            time(10)
+            send_signal("GOOD")
+            time(3)
+            send_signal("WARN")
+            time(7)
+            send_signal("BAD") 
+            time(10) 
+            send_signal("WARN")
+            time(5)
+            send_signal("BAD") 
+            time(10)
+            send_signal("WARN")
+            time(5)
+            send_signal("GOOD")
+            time(10)
+            send_signal("GOOD")
+            time(3)
+            send_signal("WARN")
+            time(7)
+            send_signal("BAD") 
+            time(10) 
+            send_signal("WARN")
+            time(5)
+            send_signal("BAD") 
+            time(10)
+            send_signal("WARN")
+            time(5)
+            send_signal("GOOD")
+            time(10)
+            # if arduino_elapsed < ARDUINO_GOOD_DURATION:
+            #     # 0-5 seconds: Send GOOD
+            #     send_signal("GOOD")
+            #     arduino_status = f"Arduino: GOOD ({ARDUINO_GOOD_DURATION - arduino_elapsed:.1f}s left)"
+            # elif arduino_elapsed < ARDUINO_WARN_DURATION:
+            #     # 5-10 seconds: Send WARN
+            #     send_signal("WARN")
+            #     arduino_status = f"Arduino: WARN ({ARDUINO_WARN_DURATION - arduino_elapsed:.1f}s left)"
+            # else:
+            #     # 10+ seconds: Send BAD
+            #     send_signal("BAD")
+            #     arduino_status = f"Arduino: BAD ({arduino_elapsed - ARDUINO_WARN_DURATION:.1f}s)"
 
             # Display status based on actual posture detection (for CV display only)
             if posture_issues:
