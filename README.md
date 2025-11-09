@@ -10,6 +10,7 @@ Using **OpenCV**, **Python**, and **Arduino**, it monitors your posture in real 
 
 <p align = "center">
   <img src = "Chiro.jpg" alt = "Picture of Chiro!" width = "300">
+  <br>
   <em>Meet Chiro! 🐾</em>
 </p>
 
