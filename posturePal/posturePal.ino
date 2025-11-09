@@ -15,6 +15,12 @@ const int SPEED_BACKWARD = 98;   // backward = tilt up
 const int STEP_TIME = 600;   // one "step" time (good→warn or warn→bad)
 const int RESET_TIME = 1200;  // full reset to center (good)
 
+// --- Tail timing ---
+const unsigned long GOOD_INTERVAL = 120000;  // 2 minutes (adjust as needed)
+const unsigned long WARN_INTERVAL = 180000;  // 3 minutes (adjust as needed)
+const unsigned long TAIL_SWEEP_DURATION = 1000;  // 1 second per direction
+
+// Tail speeds (for continuous rotation servo)
 const int TAIL_STOP = 90;        // fine-tune this until servo stays still
 const int TAIL_CLOCKWISE = 80;   // adjust for balanced rotation
 const int TAIL_COUNTER = 100;    // adjust for balanced rotation
@@ -32,8 +38,8 @@ PostureState currentState = STATE_GOOD;
 unsigned long tailCycleStartTime = 0;
 enum TailState {
   TAIL_IDLE,
-  TAIL_CLOCKWISE,
-  TAIL_COUNTER
+  TAIL_STATE_CW,
+  TAIL_STATE_CCW
 };
 TailState tailState = TAIL_IDLE;
 
@@ -42,10 +48,6 @@ void moveServo(int speed, int duration) {
   delay(duration);
   servoEars.write(SPEED_STOP);
 }
-
-servoTail.attach(PIN_TAIL);
-servoTail.write(TAIL_STOP);
-tailCycleStartTime = millis();  // start the timer
 
 void wagTail(int speed, int duration) {
   int pos = 0;
@@ -115,6 +117,10 @@ void setup() {
 
   servoEars.attach(PIN_EARS);
   servoEars.write(SPEED_STOP);
+  
+  servoTail.attach(PIN_TAIL);
+  servoTail.write(TAIL_STOP);
+  tailCycleStartTime = millis();
 }
 
 void loop() {
@@ -132,7 +138,8 @@ void loop() {
       }
     }
   }
-  handleTailSweep()
+  
+  handleTailSweep();
 }
 
 void handleTailSweep() {
@@ -156,27 +163,27 @@ void handleTailSweep() {
       // Wait for the full cycle interval
       if (elapsed >= cycleInterval) {
         // Start new wag cycle
-        tailState = TAIL_CLOCKWISE;
+        tailState = TAIL_STATE_CW;
         tailCycleStartTime = now;
         servoTail.write(TAIL_CLOCKWISE);
       }
       break;
       
-    case TAIL_CLOCKWISE:
+    case TAIL_STATE_CW:
       // Rotate clockwise for 1 second
       if (elapsed >= TAIL_SWEEP_DURATION) {
-        tailState = TAIL_COUNTER;
+        tailState = TAIL_STATE_CCW;
         tailCycleStartTime = now;
         servoTail.write(TAIL_COUNTER);
       }
       break;
       
-    case TAIL_COUNTER:
+    case TAIL_STATE_CCW:
       // Rotate counter-clockwise for 1 second
       if (elapsed >= TAIL_SWEEP_DURATION) {
         tailState = TAIL_IDLE;
         tailCycleStartTime = now;
-        servoTail.write(TAIL_STOP);  // STOP the tail
+        servoTail.write(TAIL_STOP);
       }
       break;
   }
