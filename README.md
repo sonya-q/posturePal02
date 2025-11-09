@@ -8,7 +8,9 @@ Created for: **BoxBots** - Robotics And Cardboard Hackathon
 
 Using **OpenCV**, **Python**, and **Arduino**, it monitors your posture in real time and responds through a cardboard robotic pet that reacts to your body alignment, gently encouraging you to sit up straight.
 
-![Picture of Chiro!](Chiro.jpg)
+<p align = "center">
+  <img src="Chiro.jpg" alt="Picture of Chiro!" width="300">
+</p>
 
 ---
 
