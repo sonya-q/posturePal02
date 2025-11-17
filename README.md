@@ -59,15 +59,3 @@ The posture state is sent to the Arduino via **Serial communication**.
 | GOOD | Upright | Wags fast | — |
 | WARN | Slightly down | Wags slowly | — |
 | BAD | Fully down | Stops | Soft bark |
-
----
-
-## 🧰 Tech Stack
-
-| Component | Technology |
-|------------|-------------|
-| Computer Vision | Python + OpenCV |
-| Pose Estimation | MediaPipe (or OpenCV landmarks) |
-| Microcontroller | Arduino Uno / Nano |
-| Hardware | MG90S Micro Servos, Buzzer |
-| Chassis | Cardboard + 3D printed mounts |
